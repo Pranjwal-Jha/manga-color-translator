@@ -164,6 +164,113 @@ def sort_manga_order(boxes: List[Box], img_h: int) -> List[Box]:
     )
 
 
+def filter_furigana(boxes: List[Box], img_h: int) -> List[Box]:
+    """
+    Drop boxes that are almost certainly furigana (ruby annotations) or
+    noise blobs too small to hold a readable character.
+
+    Furigana sit above/beside their parent kanji and are typically ⅓–¼ the
+    height of the main-text characters.  Any detection shorter than ~30 px on
+    a standard manga scan is not worth passing to manga-ocr — it would only
+    produce hallucinations.
+
+    Thresholds scale with image height so the filter adapts to resolution:
+      min_h   ≈ 1.6 % of image height  →  ~30 px on a 1884-px-tall scan
+      min_w   ≈ half of min_h          →  allows narrow single-character columns
+      min_area = min_h²                →  rejects tiny square blobs
+    """
+    min_h    = max(28, int(img_h * 0.016))
+    min_w    = max(14, min_h // 2)
+    min_area = min_h * min_h
+    return [
+        (x1, y1, x2, y2) for x1, y1, x2, y2 in boxes
+        if (y2 - y1) >= min_h
+        and (x2 - x1) >= min_w
+        and (y2 - y1) * (x2 - x1) >= min_area
+    ]
+
+
+def merge_nearby_boxes(boxes: List[Box], gap_ratio: float = 0.25) -> List[Box]:
+    """
+    Collapse spatially close boxes into one, handling two common CRAFT
+    fragmentation patterns:
+
+      1. Vertical text columns — CRAFT often detects each column of a speech
+         bubble as a separate narrow box.  These sit side-by-side with nearly
+         identical vertical extents and should become one crop.
+
+      2. Minor fragmentation — a single text run whose left/right edge was
+         slightly under the detection threshold gets snapped into two boxes.
+
+    Algorithm
+    ---------
+    Each box is padded by  gap_ratio × its own height  on every side before
+    the overlap test, so the merge threshold naturally scales with text size
+    (small boxes need a shorter absolute gap, large boxes tolerate a bigger
+    one).  The cap of 60 px prevents very tall speech-bubble boxes from
+    accidentally pulling in text from the next panel.
+
+    Union-Find is used so transitive chains (A touches B, B touches C →
+    all three merge) are resolved in a single O(n²) pass instead of requiring
+    multiple iterations.
+    """
+    if len(boxes) <= 1:
+        return boxes
+
+    from collections import defaultdict
+
+    n = len(boxes)
+
+    def padded_overlap(a: Box, b: Box) -> bool:
+        ax1, ay1, ax2, ay2 = a
+        bx1, by1, bx2, by2 = b
+        # Scale padding to each box's own height, capped so tall boxes don't
+        # reach across panel borders.
+        pad_a = min(int((ay2 - ay1) * gap_ratio), 60)
+        pad_b = min(int((by2 - by1) * gap_ratio), 60)
+        pad   = (pad_a + pad_b) // 2
+        return (
+            ax1 - pad < bx2 + pad
+            and ax2 + pad > bx1 - pad
+            and ay1 - pad < by2 + pad
+            and ay2 + pad > by1 - pad
+        )
+
+    # ── Union-Find ────────────────────────────────────────────────────────────
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]   # path compression
+            x = parent[x]
+        return x
+
+    def union(x: int, y: int) -> None:
+        px, py = find(x), find(y)
+        if px != py:
+            parent[px] = py
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if padded_overlap(boxes[i], boxes[j]):
+                union(i, j)
+
+    # ── Merge each connected component into one bounding box ──────────────────
+    groups: dict = defaultdict(list)
+    for i, box in enumerate(boxes):
+        groups[find(i)].append(box)
+
+    return [
+        (
+            min(b[0] for b in g),
+            min(b[1] for b in g),
+            max(b[2] for b in g),
+            max(b[3] for b in g),
+        )
+        for g in groups.values()
+    ]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 – Crop preprocessing
 # ─────────────────────────────────────────────────────────────────────────────
@@ -248,11 +355,16 @@ def run(
 
     boxes = filter_boxes(raw_boxes, img_w, img_h)
     boxes = nms(boxes, threshold=0.4)
+    boxes = filter_furigana(boxes, img_h)
+    boxes = merge_nearby_boxes(boxes, gap_ratio=0.05)
     boxes = sort_manga_order(boxes, img_h)
 
     if debug:
-        print(f"[debug] raw detections={len(raw_boxes)}, "
-              f"after filter+NMS={len(boxes)}")
+        print(
+            f"[debug] raw={len(raw_boxes)} → "
+            f"filter+NMS={len(nms(filter_boxes(raw_boxes, img_w, img_h), 0.4))} → "
+            f"drop furigana+merge={len(boxes)}"
+        )
 
     if not boxes:
         print("No text regions detected.")
