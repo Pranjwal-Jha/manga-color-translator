@@ -438,3 +438,212 @@ async def get_image(job_id: str, stage: str):
     if not path.exists():
         return JSONResponse(status_code=404, content={"error": "Image not ready yet"})
     return FileResponse(str(path), media_type="image/png")
+
+
+# ── Model VRAM management ────────────────────────────────────────────────────
+
+@app.post("/api/unload_models")
+async def unload_models():
+    """Free GPU VRAM by unloading cached models (manga-ocr, LaMa, EasyOCR) and stopping llama server."""
+    import gc
+    import subprocess
+
+    unloaded = []
+    for name in list(_models.keys()):
+        del _models[name]
+        unloaded.append(name)
+
+    # Try to stop the llama.cpp docker container
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "-q", "--filter", "ancestor=local/llama.cpp:server-cuda"],
+            capture_output=True, text=True, check=True
+        )
+        for cid in result.stdout.strip().split("\n"):
+            if cid:
+                subprocess.run(["docker", "stop", "-t", "2", cid], check=False)
+                unloaded.append("llama-server")
+    except Exception as e:
+        print(f"Could not stop llama container: {e}")
+
+    gc.collect()
+
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            free, total = torch.cuda.mem_get_info()
+            vram_free_mb = free / 1024 / 1024
+            vram_total_mb = total / 1024 / 1024
+            return {
+                "unloaded": unloaded,
+                "vram_free_mb": round(vram_free_mb),
+                "vram_total_mb": round(vram_total_mb),
+            }
+    except ImportError:
+        pass
+
+    return {"unloaded": unloaded, "vram_free_mb": None}
+
+
+# ── Colorization (ComfyUI proxy) ─────────────────────────────────────────────
+
+COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://localhost:8188")
+WORKFLOW_PATH = UI_DIR / "manga_color_api_cv_lab.json"
+
+color_jobs: Dict[str, dict] = {}
+
+
+def _upload_to_comfyui(img_bytes: bytes, filename: str) -> str:
+    """Upload an image to ComfyUI's input folder and return the server filename."""
+    resp = requests.post(
+        f"{COMFYUI_URL}/upload/image",
+        files={"image": (filename, img_bytes, "image/png")},
+        data={"overwrite": "true"},
+    )
+    resp.raise_for_status()
+    return resp.json()["name"]
+
+
+def _run_colorize(job_id: str, panel_bytes: bytes,
+                  ref1_bytes: bytes, ref2_bytes: Optional[bytes]) -> None:
+    """Submit the colorization workflow to ComfyUI and poll for result."""
+    job = color_jobs[job_id]
+    job_dir = WORK_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        job["status"] = "uploading"
+        job["progress"] = 10
+
+        # Save original locally
+        arr = np.frombuffer(panel_bytes, np.uint8)
+        img_bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img_bgr is not None:
+            _save_image(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB),
+                        job_dir / "color_original.png")
+
+        # Upload images to ComfyUI
+        panel_name = _upload_to_comfyui(panel_bytes, f"{job_id}_panel.png")
+        ref1_name = _upload_to_comfyui(ref1_bytes, f"{job_id}_ref1.png")
+        ref2_name = ref1_name
+        if ref2_bytes:
+            ref2_name = _upload_to_comfyui(ref2_bytes, f"{job_id}_ref2.png")
+
+        job["status"] = "queued"
+        job["progress"] = 25
+
+        # Build workflow from template
+        import copy
+        workflow = json.loads(WORKFLOW_PATH.read_text())
+
+        # Node 76 = manga panel, Node 81 = ref1, Node 194 = ref2
+        workflow["76"]["inputs"]["image"] = panel_name
+        workflow["81"]["inputs"]["image"] = ref1_name
+        workflow["194"]["inputs"]["image"] = ref2_name
+
+        # Submit to ComfyUI
+        prompt_resp = requests.post(
+            f"{COMFYUI_URL}/prompt",
+            json={"prompt": workflow},
+            timeout=30,
+        )
+        prompt_resp.raise_for_status()
+        prompt_id = prompt_resp.json()["prompt_id"]
+
+        job["status"] = "generating"
+        job["progress"] = 40
+        job["prompt_id"] = prompt_id
+
+        # Poll ComfyUI history for completion
+        for _ in range(600):  # up to ~10 min
+            time.sleep(1)
+            try:
+                hist_resp = requests.get(
+                    f"{COMFYUI_URL}/history/{prompt_id}", timeout=10,
+                )
+                hist = hist_resp.json()
+                if prompt_id in hist:
+                    outputs = hist[prompt_id].get("outputs", {})
+                    # Node 110 is the SaveImage node
+                    if "110" in outputs and outputs["110"].get("images"):
+                        img_info = outputs["110"]["images"][0]
+                        img_url = (
+                            f"{COMFYUI_URL}/view?"
+                            f"filename={img_info['filename']}"
+                            f"&subfolder={img_info.get('subfolder', '')}"
+                            f"&type={img_info.get('type', 'output')}"
+                        )
+                        img_resp = requests.get(img_url, timeout=30)
+                        img_resp.raise_for_status()
+
+                        # Save result
+                        result_path = job_dir / "color_result.png"
+                        result_path.write_bytes(img_resp.content)
+
+                        job["status"] = "done"
+                        job["progress"] = 100
+                        return
+
+                    # Check for errors
+                    status_data = hist[prompt_id].get("status", {})
+                    if status_data.get("status_str") == "error":
+                        job["status"] = "error"
+                        job["error"] = "ComfyUI workflow failed"
+                        return
+            except requests.RequestException:
+                pass  # ComfyUI might be busy, keep polling
+
+            # Update progress linearly while generating
+            job["progress"] = min(90, 40 + _ // 6)
+
+        job["status"] = "error"
+        job["error"] = "Timeout waiting for ComfyUI to finish"
+
+    except Exception as e:
+        job["status"] = "error"
+        job["error"] = f"{type(e).__name__}: {e}"
+
+
+@app.post("/api/colorize")
+async def colorize(
+    panel: UploadFile = File(...),
+    ref1: UploadFile = File(...),
+    ref2: Optional[UploadFile] = File(None),
+):
+    """Upload a B&W manga panel + 1-2 color reference images for colorization."""
+    job_id = "c-" + str(uuid.uuid4())[:6]
+    panel_bytes = await panel.read()
+    ref1_bytes = await ref1.read()
+    ref2_bytes = await ref2.read() if ref2 else None
+
+    color_jobs[job_id] = {
+        "status": "queued",
+        "progress": 0,
+        "created": time.time(),
+    }
+
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _run_colorize, job_id, panel_bytes,
+                         ref1_bytes, ref2_bytes)
+
+    return {"job_id": job_id}
+
+
+@app.get("/api/colorize/status/{job_id}")
+async def colorize_status(job_id: str):
+    if job_id not in color_jobs:
+        return JSONResponse(status_code=404, content={"error": "Job not found"})
+    return color_jobs[job_id]
+
+
+@app.get("/api/colorize/image/{job_id}/{stage}")
+async def colorize_image(job_id: str, stage: str):
+    allowed = {"color_original", "color_result"}
+    if stage not in allowed:
+        return JSONResponse(status_code=400, content={"error": f"Invalid stage"})
+    path = WORK_DIR / job_id / f"{stage}.png"
+    if not path.exists():
+        return JSONResponse(status_code=404, content={"error": "Not ready"})
+    return FileResponse(str(path), media_type="image/png")

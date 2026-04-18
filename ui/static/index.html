@@ -126,6 +126,40 @@
     .about-close:hover{border-color:var(--terracotta);color:var(--terracotta)}
     .about-link{color:var(--text3);font-size:.78rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px;transition:color .2s}
     .about-link:hover{color:var(--terracotta)}
+
+    /* Tabs */
+    .tabs{display:flex;position:relative;margin-bottom:2rem;border:none;border-radius:10px;background:var(--bg2);padding:3px}
+    .tab{flex:1;padding:.6rem;text-align:center;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--text3);transition:color .3s;border:none;background:none;font-family:inherit;position:relative;z-index:1}
+    .tab.active{color:#fff}
+    .tab:not(.active):hover{color:var(--text)}
+    .tab-indicator{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);background:var(--terracotta);border-radius:8px;transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:0}
+    .tabs[data-active="colorize"] .tab-indicator{transform:translateX(100%)}
+    .tab-content-wrapper{overflow:hidden}
+    .tab-content-slider{display:flex;width:200%;transition:transform .4s cubic-bezier(.4,0,.2,1);align-items:start}
+    .tab-pane{width:50%;flex-shrink:0;min-height:220px}
+
+    /* Colorize */
+    .color-zone{display:none;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.5rem}
+    .color-zone.active{display:block;animation:fadeIn .3s ease}
+    .color-zone h3{font-family:'DM Serif Display',serif;font-size:1rem;font-weight:400;margin-bottom:.4rem}
+    .color-zone p{font-size:.78rem;color:var(--text2);margin-bottom:1rem}
+    .file-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-bottom:1rem}
+    @media(max-width:640px){.file-row{grid-template-columns:1fr}}
+    .file-slot{border:1.5px dashed var(--border2);border-radius:10px;padding:1rem;text-align:center;cursor:pointer;transition:all .2s;position:relative;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .file-slot:hover{border-color:var(--terracotta);background:var(--cream)}
+    .file-slot.has-file{border-style:solid;border-color:var(--sage);background:var(--sage-light)}
+    .file-slot .slot-label{font-size:.7rem;font-weight:600;color:var(--text2);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.05em}
+    .file-slot .slot-name{font-size:.7rem;color:var(--text3);word-break:break-all}
+    .file-slot input{display:none}
+    .file-slot .slot-icon{font-size:1.2rem;margin-bottom:.3rem}
+    .color-results{display:none;margin-top:1.5rem}
+    .color-results.active{display:block;animation:fadeIn .4s ease}
+
+    /* VRAM button */
+    .vram-btn{padding:.35rem .8rem;border-radius:6px;font-size:.68rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text2);font-family:inherit;transition:all .2s;white-space:nowrap}
+    .vram-btn:hover{border-color:var(--terracotta);color:var(--terracotta)}
+    .vram-btn.unloading{opacity:.5;pointer-events:none}
+    .vram-info{font-size:.65rem;color:var(--sage);margin-left:.5rem}
   </style>
 </head>
 <body>
@@ -137,11 +171,24 @@
         <span><span class="dot" style="background:var(--terracotta)"></span>CRAFT</span>
         <span><span class="dot" style="background:var(--amber)"></span>manga-ocr</span>
         <span><span class="dot" style="background:var(--sage)"></span>Qwen LLM</span>
-        <span><span class="dot" style="background:var(--text3)"></span>LaMa</span>
         <span class="about-link" id="aboutOpen">About</span>
+        <button class="vram-btn" id="vramBtn">Free VRAM</button>
+        <span class="vram-info" id="vramInfo"></span>
       </div>
     </header>
 
+    <!-- Mode tabs -->
+    <div class="tabs" id="modeTabs" data-active="translate">
+      <div class="tab-indicator"></div>
+      <button class="tab active" data-tab="translate">Translate</button>
+      <button class="tab" data-tab="colorize">Colorize</button>
+    </div>
+
+    <!-- Content slider -->
+    <div class="tab-content-wrapper">
+      <div class="tab-content-slider" id="tabSlider">
+        <!-- TRANSLATE tab -->
+        <div class="tab-pane" id="translateTab">
     <div class="upload-zone" id="dropZone">
       <div class="upload-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -161,7 +208,7 @@
           <div class="step" data-s="translating"><div class="step-num">3</div><div class="step-name">Translate</div></div>
           <div class="step" data-s="erasing"><div class="step-num">4</div><div class="step-name">Erase</div></div>
           <div class="step" data-s="rendering"><div class="step-num">5</div><div class="step-name">Render</div></div>
-          <div class="step" data-s="done"><div class="step-num">✓</div><div class="step-name">Done</div></div>
+          <div class="step" data-s="done"><div class="step-num">6</div><div class="step-name">Done</div></div>
         </div>
       </div>
       <div class="card ocr-card" id="ocrCard">
@@ -177,7 +224,7 @@
         <h2>Translation complete</h2>
         <div class="actions">
           <button class="btn btn-outline" id="debugToggle">View steps</button>
-          <button class="btn btn-primary" id="downloadBtn">↓ Download</button>
+          <button class="btn btn-primary" id="downloadBtn">Download</button>
           <button class="btn btn-outline" id="newBtn">+ New</button>
         </div>
       </div>
@@ -195,6 +242,36 @@
         </div>
       </div>
     </div>
+    </div><!-- /translateTab -->
+
+    <!-- COLORIZE tab -->
+    <div class="tab-pane" id="colorizeTab">
+      <div class="color-zone active">
+        <h3>Manga Colorization</h3>
+        <p>Upload a B&W manga panel and 1–2 color reference images. Powered by Flux2 Klein + colorMangaKlein LoRA via ComfyUI.</p>
+        <div class="file-row">
+          <div class="file-slot" id="slotPanel"><input type="file" accept="image/*"><div class="slot-label">Panel (B&W)</div><div class="slot-name" id="slotPanelName">click to select</div></div>
+          <div class="file-slot" id="slotRef1"><input type="file" accept="image/*"><div class="slot-label">Reference 1</div><div class="slot-name" id="slotRef1Name">click to select</div></div>
+          <div class="file-slot" id="slotRef2"><input type="file" accept="image/*"><div class="slot-label">Reference 2 (opt.)</div><div class="slot-name" id="slotRef2Name">click to select</div></div>
+        </div>
+        <button class="btn btn-primary" id="colorizeBtn" disabled>Colorize</button>
+      </div>
+      <div class="progress-section" id="colorProgress">
+        <div class="card">
+          <div class="progress-top"><span class="label" id="colorStatusLabel">Starting…</span><span class="pct" id="colorStatusPct">0%</span></div>
+          <div class="bar-track"><div class="bar-fill" id="colorBar"></div></div>
+        </div>
+      </div>
+      <div class="error-box" id="colorError"></div>
+      <div class="color-results" id="colorResults">
+        <div class="results-header"><h2>Colorization complete</h2><div class="actions"><button class="btn btn-primary" id="colorDlBtn">Download</button><button class="btn btn-outline" id="colorNewBtn">+ New</button></div></div>
+        <div class="compare">
+          <div class="img-card"><img id="colorOriginal"><div class="img-tag"><span class="tag-dot" style="background:var(--text3)"></span>Original (B&W)</div></div>
+          <div class="img-card"><img id="colorResult"><div class="img-tag"><span class="tag-dot" style="background:var(--terracotta)"></span>Colorized</div></div>
+        </div>
+      </div>
+    </div><!-- /colorizeTab -->
+    </div></div><!-- /tab-content-slider and /tab-content-wrapper -->
 
     <!-- Lightbox -->
     <div class="lightbox" id="lightbox"><img id="lbImg"><div class="lightbox-label" id="lbLabel"></div></div>
@@ -258,6 +335,28 @@
     aboutOverlay.addEventListener('click',closeAbout);
     function closeAbout(){aboutPanel.classList.remove('open');aboutOverlay.classList.remove('open')}
 
+    // ── Tab switching ──
+    $$('.tab').forEach(t=>t.addEventListener('click',()=>{
+      $$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
+      const tab=t.dataset.tab;
+      $('#modeTabs').dataset.active=tab;
+      $('#tabSlider').style.transform=tab==='translate'?'translateX(0)':'translateX(-50%)';
+    }));
+
+    // ── VRAM unload ──
+    $('#vramBtn').addEventListener('click',async function(){
+      this.classList.add('unloading');this.textContent='Unloading…';
+      try{
+        const r=await fetch(`${API}/api/unload_models`,{method:'POST'});const d=await r.json();
+        const info=d.vram_free_mb?`${d.vram_free_mb} MB free / ${d.vram_total_mb} MB`:'Models cleared';
+        $('#vramInfo').textContent=info;
+        this.textContent='Free VRAM';
+      }catch(e){$('#vramInfo').textContent='Failed';}
+      this.classList.remove('unloading');
+      setTimeout(()=>$('#vramInfo').textContent='',5000);
+    });
+
+    // ── TRANSLATE ──
     let jobId=null;
     async function upload(f){
       dz.style.display='none';$('#resultsSection').classList.remove('active');$('#errorMsg').classList.remove('active');
@@ -288,6 +387,49 @@
     }
     function showErr(m){$('#errorMsg').textContent=m;$('#errorMsg').classList.add('active')}
     function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+    // ── COLORIZE ──
+    const colorFiles={panel:null,ref1:null,ref2:null};
+    ['slotPanel','slotRef1','slotRef2'].forEach(id=>{
+      const slot=$('#'+id),inp=slot.querySelector('input'),key=id.replace('slot','').toLowerCase();
+      const nameEl=$('#'+id+'Name');
+      slot.addEventListener('click',()=>inp.click());
+      inp.addEventListener('change',()=>{
+        if(inp.files.length){colorFiles[key]=inp.files[0];nameEl.textContent=inp.files[0].name;slot.classList.add('has-file')}
+        $('#colorizeBtn').disabled=!(colorFiles.panel&&colorFiles.ref1);
+      });
+    });
+
+    let colorJobId=null;
+    $('#colorizeBtn').addEventListener('click',async()=>{
+      const fd=new FormData();fd.append('panel',colorFiles.panel);fd.append('ref1',colorFiles.ref1);
+      if(colorFiles.ref2)fd.append('ref2',colorFiles.ref2);
+      $('#colorProgress').classList.add('active');$('#colorResults').classList.remove('active');$('#colorError').classList.remove('active');
+      $('#colorBar').style.width='0%';$('#colorStatusPct').textContent='0%';$('#colorStatusLabel').textContent='Uploading…';
+      try{
+        const r=await fetch(`${API}/api/colorize`,{method:'POST',body:fd});const d=await r.json();colorJobId=d.job_id;
+        const iv=setInterval(async()=>{
+          try{
+            const r2=await fetch(`${API}/api/colorize/status/${colorJobId}`),j=await r2.json(),p=j.progress||0;
+            $('#colorBar').style.width=p+'%';$('#colorStatusPct').textContent=p+'%';
+            $('#colorStatusLabel').textContent={uploading:'Uploading to ComfyUI…',queued:'Queued…',generating:'Generating (this takes a while)…',done:'Done!'}[j.status]||'Processing…';
+            if(j.status==='done'){clearInterval(iv);$('#colorProgress').classList.remove('active');
+              const b=`${API}/api/colorize/image/${colorJobId}`;
+              $('#colorOriginal').src=b+'/color_original';$('#colorResult').src=b+'/color_result';
+              $('#colorResults').classList.add('active');
+              $('#colorDlBtn').onclick=()=>{const a=document.createElement('a');a.href=b+'/color_result';a.download='colorized.png';a.click()};
+            }else if(j.status==='error'){clearInterval(iv);$('#colorError').textContent=j.error||'Error';$('#colorError').classList.add('active')}
+          }catch(e){clearInterval(iv);$('#colorError').textContent='Connection lost';$('#colorError').classList.add('active')}
+        },1500);
+      }catch(e){$('#colorError').textContent='Upload failed: '+e.message;$('#colorError').classList.add('active')}
+    });
+
+    $('#colorNewBtn').addEventListener('click',()=>{
+      $('#colorResults').classList.remove('active');$('#colorProgress').classList.remove('active');$('#colorError').classList.remove('active');
+      colorFiles.panel=colorFiles.ref1=colorFiles.ref2=null;
+      ['slotPanel','slotRef1','slotRef2'].forEach(id=>{$('#'+id).classList.remove('has-file');$('#'+id+'Name').textContent='click to select';$('#'+id).querySelector('input').value=''});
+      $('#colorizeBtn').disabled=true;
+    });
   </script>
 </body>
 </html>
