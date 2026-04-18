@@ -15,3 +15,6 @@ debug.txt
 
 # Downloaded model weights — re-downloaded automatically on first run
 models/
+
+# ui bloat
+ui/_work/*

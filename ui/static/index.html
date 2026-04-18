@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manga Translator</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&family=Noto+Sans+JP:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --bg:#FAF5EE;--bg2:#F3ECE1;--card:#FFFFFF;
+      --text:#2C2416;--text2:#7D7263;--text3:#B5A997;
+      --border:#E8DFD2;--border2:#D4C9B8;
+      --terracotta:#C4613A;--terra-light:#F0D3C4;
+      --sage:#7A8E6E;--sage-light:#D8E2D0;
+      --amber:#D4943A;--amber-light:#F5E6C8;
+      --cream:#FFF8F0;
+    }
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    .app{max-width:860px;margin:0 auto;padding:3rem 1.5rem 5rem}
+
+    /* Header */
+    header{text-align:center;margin-bottom:3.5rem;padding-top:1rem}
+    header h1{font-family:'DM Serif Display',serif;font-size:2.4rem;font-weight:400;color:var(--text);letter-spacing:-.01em;margin-bottom:.4rem}
+    header h1 span{font-family:'Noto Sans JP',sans-serif;font-weight:600;font-size:1.8rem;color:var(--terracotta)}
+    header p{color:var(--text2);font-size:.9rem;max-width:360px;margin:0 auto;line-height:1.6}
+    .tech-line{display:flex;justify-content:center;gap:1.5rem;margin-top:1rem;font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.1em}
+    .tech-line span{display:flex;align-items:center;gap:.35rem}
+    .tech-line .dot{width:5px;height:5px;border-radius:50%}
+
+    /* Upload */
+    .upload-zone{border:1.5px dashed var(--border2);border-radius:16px;padding:3rem 2rem;text-align:center;cursor:pointer;transition:all .3s ease;background:var(--card)}
+    .upload-zone:hover,.upload-zone.drag{border-color:var(--terracotta);background:var(--cream)}
+    .upload-icon{width:52px;height:52px;margin:0 auto 1rem;border-radius:50%;background:var(--terra-light);display:flex;align-items:center;justify-content:center;transition:transform .3s}
+    .upload-zone:hover .upload-icon{transform:translateY(-2px)}
+    .upload-icon svg{width:22px;height:22px;stroke:var(--terracotta);stroke-width:2}
+    .upload-zone h3{font-family:'DM Serif Display',serif;font-size:1.1rem;font-weight:400;margin-bottom:.3rem}
+    .upload-zone span{color:var(--text3);font-size:.78rem}
+    .upload-zone input{display:none}
+
+    /* Progress */
+    .progress-section{display:none;margin-top:2rem}
+    .progress-section.active{display:block;animation:fadeIn .4s ease}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.4rem 1.5rem;margin-bottom:1rem}
+
+    .progress-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:.7rem}
+    .progress-top .label{font-size:.82rem;color:var(--text2)}
+    .progress-top .pct{font-size:.82rem;font-weight:600;color:var(--terracotta);font-variant-numeric:tabular-nums}
+    .bar-track{height:3px;background:var(--bg2);border-radius:2px;overflow:hidden}
+    .bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--terracotta),var(--amber));transition:width .5s ease;width:0}
+
+    .steps{display:flex;justify-content:space-between;margin-top:1.2rem;position:relative}
+    .steps::before{content:'';position:absolute;top:11px;left:32px;right:32px;height:1px;background:var(--border)}
+    .step{text-align:center;position:relative;z-index:1;flex:1}
+    .step-num{width:22px;height:22px;border-radius:50%;margin:0 auto .4rem;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:600;background:var(--bg2);color:var(--text3);border:1.5px solid var(--border);transition:all .3s}
+    .step.done .step-num{background:var(--sage);border-color:var(--sage);color:#fff}
+    .step.active .step-num{border-color:var(--terracotta);color:var(--terracotta);background:var(--terra-light)}
+    .step-name{font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;transition:color .3s}
+    .step.done .step-name{color:var(--sage)}
+    .step.active .step-name{color:var(--terracotta)}
+
+    /* OCR table */
+    .ocr-card{display:none}
+    .ocr-card.show{display:block;animation:fadeIn .3s ease}
+    .ocr-card h4{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:.8rem}
+    table{width:100%;border-collapse:collapse;font-size:.8rem}
+    th{text-align:left;padding:.4rem .5rem;font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);border-bottom:1px solid var(--border);font-weight:500}
+    td{padding:.5rem;border-bottom:1px solid var(--bg2)}
+    tr:last-child td{border:none}
+    .jp{font-family:'Noto Sans JP',sans-serif}
+    .en{color:var(--terracotta);font-weight:500}
+
+    /* Results */
+    .results{display:none;margin-top:2rem}
+    .results.active{display:block;animation:fadeIn .5s ease}
+    .results-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem}
+    .results-header h2{font-family:'DM Serif Display',serif;font-size:1.3rem;font-weight:400}
+    .actions{display:flex;gap:.5rem;flex-wrap:wrap}
+    .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .2s}
+    .btn-primary{background:var(--terracotta);color:#fff}
+    .btn-primary:hover{background:#B55530}
+    .btn-outline{background:transparent;border:1.5px solid var(--border2);color:var(--text2)}
+    .btn-outline:hover{border-color:var(--terracotta);color:var(--terracotta)}
+
+    .compare{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem}
+    @media(max-width:640px){.compare{grid-template-columns:1fr}}
+    .img-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:box-shadow .3s}
+    .img-card:hover{box-shadow:0 8px 30px rgba(44,36,22,.08)}
+    .img-card img{width:100%;display:block}
+    .img-tag{padding:.6rem .9rem;display:flex;align-items:center;gap:.45rem;font-size:.72rem;font-weight:600;color:var(--text2);border-top:1px solid var(--border)}
+    .tag-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+    .debug-section{display:none}.debug-section.show{display:block;animation:fadeIn .3s ease}
+    .debug-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    @media(max-width:640px){.debug-grid{grid-template-columns:1fr}}
+
+    .error-box{display:none;padding:.9rem 1.1rem;border-radius:10px;background:#FEF0EE;border:1px solid #F5D0C9;color:var(--terracotta);font-size:.8rem;margin-top:1rem}
+    .error-box.active{display:block;animation:fadeIn .3s ease}
+
+    .divider{width:48px;height:1.5px;background:var(--border);margin:0 auto 1.5rem}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1><span>漫画</span> Translator</h1>
+      <p>Upload a Japanese manga panel and watch it come back translated, in seconds.</p>
+      <div class="tech-line">
+        <span><span class="dot" style="background:var(--terracotta)"></span>CRAFT</span>
+        <span><span class="dot" style="background:var(--amber)"></span>manga-ocr</span>
+        <span><span class="dot" style="background:var(--sage)"></span>Qwen LLM</span>
+        <span><span class="dot" style="background:var(--text3)"></span>LaMa</span>
+      </div>
+    </header>
+
+    <div class="upload-zone" id="dropZone">
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <h3>Drop your panel here</h3>
+      <span>or click to browse · PNG, JPG, WebP</span>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <div class="progress-section" id="progressSection">
+      <div class="card">
+        <div class="progress-top"><span class="label" id="statusLabel">Starting…</span><span class="pct" id="statusPct">0%</span></div>
+        <div class="bar-track"><div class="bar-fill" id="progressBar"></div></div>
+        <div class="steps" id="stepsRow">
+          <div class="step" data-s="detecting"><div class="step-num">1</div><div class="step-name">Detect</div></div>
+          <div class="step" data-s="recognizing"><div class="step-num">2</div><div class="step-name">OCR</div></div>
+          <div class="step" data-s="translating"><div class="step-num">3</div><div class="step-name">Translate</div></div>
+          <div class="step" data-s="erasing"><div class="step-num">4</div><div class="step-name">Erase</div></div>
+          <div class="step" data-s="rendering"><div class="step-num">5</div><div class="step-name">Render</div></div>
+          <div class="step" data-s="done"><div class="step-num">✓</div><div class="step-name">Done</div></div>
+        </div>
+      </div>
+      <div class="card ocr-card" id="ocrCard">
+        <h4>Detected text</h4>
+        <table><thead><tr><th>#</th><th>Japanese</th><th>English</th></tr></thead><tbody id="ocrBody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="error-box" id="errorMsg"></div>
+
+    <div class="results" id="resultsSection">
+      <div class="results-header">
+        <h2>Translation complete</h2>
+        <div class="actions">
+          <button class="btn btn-outline" id="debugToggle">View steps</button>
+          <button class="btn btn-primary" id="downloadBtn">↓ Download</button>
+          <button class="btn btn-outline" id="newBtn">+ New</button>
+        </div>
+      </div>
+      <div class="compare">
+        <div class="img-card"><img id="imgOriginal"><div class="img-tag"><span class="tag-dot" style="background:var(--amber)"></span>Original</div></div>
+        <div class="img-card"><img id="imgFinal"><div class="img-tag"><span class="tag-dot" style="background:var(--sage)"></span>Translated</div></div>
+      </div>
+      <div class="debug-section" id="debugSection">
+        <div class="divider"></div>
+        <div class="debug-grid">
+          <div class="img-card"><img id="imgDetection"><div class="img-tag"><span class="tag-dot" style="background:var(--amber)"></span>Detection</div></div>
+          <div class="img-card"><img id="imgMask"><div class="img-tag"><span class="tag-dot" style="background:var(--terracotta)"></span>Mask</div></div>
+          <div class="img-card"><img id="imgOverlay"><div class="img-tag"><span class="tag-dot" style="background:var(--terracotta)"></span>Overlay</div></div>
+          <div class="img-card"><img id="imgErased"><div class="img-tag"><span class="tag-dot" style="background:var(--sage)"></span>Erased</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API='';const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+    const STEPS=['detecting','recognizing','translating','erasing','rendering','done'];
+    const LABELS={detecting:'Detecting text…',recognizing:'Reading characters…',translating:'Translating…',erasing:'Erasing text…',rendering:'Rendering…',done:'All done!'};
+    const dz=$('#dropZone'),fi=$('#fileInput');
+    ['dragenter','dragover'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.add('drag')}));
+    ['dragleave','drop'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.remove('drag')}));
+    dz.addEventListener('drop',ev=>{if(ev.dataTransfer.files.length)upload(ev.dataTransfer.files[0])});
+    dz.addEventListener('click',()=>fi.click());
+    fi.addEventListener('change',()=>{if(fi.files.length)upload(fi.files[0])});
+    $('#debugToggle').addEventListener('click',function(){const d=$('#debugSection'),s=!d.classList.contains('show');d.classList.toggle('show',s);this.textContent=s?'Hide steps':'View steps'});
+    $('#newBtn').addEventListener('click',()=>{$('#resultsSection').classList.remove('active');$('#progressSection').classList.remove('active');$('#errorMsg').classList.remove('active');dz.style.display='';fi.value=''});
+    let jobId=null;
+    async function upload(f){
+      dz.style.display='none';$('#resultsSection').classList.remove('active');$('#errorMsg').classList.remove('active');
+      $('#progressSection').classList.add('active');$('#progressBar').style.width='0%';$('#statusPct').textContent='0%';$('#statusLabel').textContent='Uploading…';
+      $$('.step').forEach(s=>{s.classList.remove('done','active')});$('#ocrCard').classList.remove('show');$('#ocrBody').innerHTML='';
+      const fd=new FormData();fd.append('file',f);
+      try{const r=await fetch(`${API}/api/upload`,{method:'POST',body:fd});const d=await r.json();jobId=d.job_id;poll()}catch(e){showErr('Upload failed: '+e.message)}
+    }
+    function poll(){
+      if(!jobId)return;
+      const iv=setInterval(async()=>{
+        try{
+          const r=await fetch(`${API}/api/status/${jobId}`),j=await r.json(),p=j.progress||0;
+          $('#progressBar').style.width=p+'%';$('#statusPct').textContent=p+'%';$('#statusLabel').textContent=LABELS[j.status]||'Processing…';
+          const ci=STEPS.indexOf(j.status);
+          $$('.step').forEach(s=>{const si=STEPS.indexOf(s.dataset.s);s.classList.toggle('done',si<ci||(j.status==='done'&&si<=ci));s.classList.toggle('active',si===ci&&j.status!=='done')});
+          if(j.ocr_texts){$('#ocrCard').classList.add('show');let h='';for(let i=0;i<j.ocr_texts.length;i++){const en=j.translations?j.translations[i]||'…':'…';h+=`<tr><td>${i+1}</td><td class="jp">${esc(j.ocr_texts[i])}</td><td class="en">${esc(en)}</td></tr>`}$('#ocrBody').innerHTML=h}
+          if(j.status==='done'){clearInterval(iv);showResults()}else if(j.status==='error'){clearInterval(iv);showErr(j.error||'Unknown error')}
+        }catch(e){clearInterval(iv);showErr('Connection lost: '+e.message)}
+      },800);
+    }
+    function showResults(){
+      const b=`${API}/api/image/${jobId}`;
+      $('#imgOriginal').src=b+'/original';$('#imgFinal').src=b+'/final';
+      $('#imgDetection').src=b+'/detection';$('#imgMask').src=b+'/mask';$('#imgOverlay').src=b+'/mask_overlay';$('#imgErased').src=b+'/erased';
+      $('#resultsSection').classList.add('active');
+      $('#downloadBtn').onclick=()=>{const a=document.createElement('a');a.href=b+'/final';a.download='translated.png';a.click()};
+    }
+    function showErr(m){$('#errorMsg').textContent=m;$('#errorMsg').classList.add('active')}
+    function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+  </script>
+</body>
+</html>

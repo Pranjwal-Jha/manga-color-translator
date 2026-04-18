@@ -6,17 +6,14 @@ import argparse
 import main
 
 TRANSLATED_TEXT = [
-    "She's the Demon of Hunger.",
-    "Are you serious about that?",
-    "The real Kig-chan.",
-    "Hmm.",
-    "Ah?!",
-    "The Demon of Hunger...",
-    "and...",
-    "I'm the Death Demon of Death, so... Chii-chan.",
-    "Come on! Aza!",
-    "What happened to Yor?!",
-    "Chii-chan",
+    "Dash!!",
+    "Ah...",
+    "How could I not smell it before?!",
+    "Run, run, run!",
+    "Beam!!",
+    "Eh?!",
+    "That guy is dangerous, Chainsaw Man!",
+    "Got an odor! It's a bomb, damn it!",
 ]
 
 def get_font_path():

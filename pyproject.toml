@@ -11,4 +11,8 @@ dependencies = [
     "easyocr>=1.7.2",
     "onnxruntime-gpu>=1.24.4",
     "simple-lama-inpainting>=0.1.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "requests>=2.31.0",
 ]
