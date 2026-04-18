@@ -1,0 +1,35 @@
+Here's how they solve it — it's a layered pipeline with some clever parts:
+
+---
+
+### 1. Balloon extraction (`ballon_extractor.py`)
+They don't just use the CRAFT bounding box. They **find the actual speech bubble boundary** using Canny edge detection + flood-fill from the center of the box. This gives them the exact white region to fill, not just a rectangle. That's how they avoid text bleeding over the bubble border.
+
+### 2. Font rendering (`text_render.py`)
+They use **FreeType** (via `freetype-py`) instead of PIL to render text — glyph by glyph, manually positioning each character. This gives them:
+- Pixel-perfect placement
+- **White stroke/outline** around each character (the black outline you see on manga translations) via FreeType's `Stroker`
+- Full support for both **horizontal** (LTR/RTL) and **vertical** (CJK) text direction, with proper CJK punctuation rotation substitution (e.g. `…` → `⋮` in vertical mode)
+
+### 3. Auto font sizing + text wrapping
+`calc_horizontal` / `calc_vertical` take the **detected bubble dimensions** and binary search for a font size that makes the translated text fit, with proper hyphenation for English. The font scales to the available space rather than being hardcoded.
+
+### 4. Compositing
+The rendered text (RGBA with the stroke alpha-composited in) gets pasted onto the inpainted image, aligned to the original bounding box center.
+
+---
+
+### What that means for your project
+
+You don't need all of that. The minimal version that gives good results:
+
+| Step | Simple approach | What they do |
+|------|----------------|--------------|
+| Bubble bounds | CRAFT box | Canny + flood-fill mask |
+| Font rendering | PIL `ImageDraw` | FreeType glyph-by-glyph |
+| Text wrapping | `textwrap` + PIL `textbbox` | Custom `calc_horizontal` |
+| Font sizing | Binary search on PIL | Binary search on FreeType |
+| Stroke/outline | PIL `stroke_width` param | FreeType Stroker |
+| Direction | Horizontal only | Horizontal + vertical |
+
+PIL can do the stroke and wrapping fine for English. The only thing PIL genuinely can't match is vertical CJK typesetting — for that you'd need FreeType. If your translations are going to English, PIL is sufficient and much simpler to implement.

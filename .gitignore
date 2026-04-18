@@ -8,4 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# testing files
 *.png
+debug.txt
+
+# Downloaded model weights — re-downloaded automatically on first run
+models/
