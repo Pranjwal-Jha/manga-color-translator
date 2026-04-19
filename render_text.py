@@ -195,7 +195,8 @@ def run():
         print(f"Warning: Dimensions mismatch! Image is {img_w}x{img_h} but erased is {erased_bgr.shape[1]}x{erased_bgr.shape[0]}. Resizing erased background.")
         erased_bgr = cv2.resize(erased_bgr, (img_w, img_h))
 
-    raw_boxes = main.detect_text_regions(img_bgr, gpu=True)
+    import torch
+    raw_boxes = main.detect_text_regions(img_bgr, gpu=torch.cuda.is_available())
     boxes = main.filter_boxes(raw_boxes, img_w, img_h)
     boxes = main.nms(boxes, threshold=0.4)
     boxes = main.filter_furigana(boxes, img_h)

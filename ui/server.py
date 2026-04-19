@@ -299,7 +299,8 @@ def _run_pipeline(job_id: str, img_bytes: bytes) -> None:
         job["progress"] = 10
 
         # ── 1. Detection ──────────────────────────────────────────────────
-        raw_boxes = detect_text_regions(img_bgr, gpu=True)
+        import torch
+        raw_boxes = detect_text_regions(img_bgr, gpu=torch.cuda.is_available())
         boxes = filter_boxes(raw_boxes, img_w, img_h)
         boxes = nms(boxes, threshold=0.4)
         boxes = filter_furigana(boxes, img_h)
