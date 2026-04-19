@@ -58,7 +58,11 @@ If you prefer to set things up manually:
 3. **Run Translation LLM:**
    The server expects a `llama.cpp` server (or compatible OpenAI-like API) on port `8080`.
    ```bash
-   ./llama-server -m qwen2.5-7b-instruct.gguf --port 8080
+   # Download Qwen 3.5 2B (recommended for speed/local use)
+   curl.exe -L "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf" -o qwen3.5.gguf
+
+   # Run the server
+   ./llama-server -m qwen3.5.gguf --port 8080
    ```
 4. **Start the Web UI:**
    ```bash
